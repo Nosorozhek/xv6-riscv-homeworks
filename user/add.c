@@ -1,50 +1,75 @@
 #include "kernel/types.h"
 #include "user/user.h"
 
-#define NULL 0
-
-int is_digit(char c) {
+static int is_digit(char c) {
   return '0' <= c && c <= '9';
 }
 
-int main(int argc, char *argv[]) {
-  const int max = 512;
-  char buf[max];
-  
+static int read_string(char* buffer, int buffer_size) {
   int i;
   char c;
-  char* first_ptr = NULL;
-  char* second_ptr = NULL;
-  for (i = 0; i + 1 < max; ++i) {
+  for (i = 0; i < buffer_size; ++i) {
     int cc = read(0, &c, 1);
     if (cc < 0) {
-      fprintf(2, "add: read error\n");
+      fprintf(2, "add: failed to read input\n");
+      exit(1);
+    } 
+    if (cc == 0 || c == '\n' || c == '\r')
+      break;
+
+    buffer[i] = c;
+  }
+  if(i == buffer_size) {
+    fprintf(2, "add: input buffer overflow\n");
+    exit(1);
+  }
+  buffer[i] = '\0';
+  return 0;
+} 
+
+static const char* parse_number(const char* s, char trailing) {
+  do {
+    if(!is_digit(*s)) {
+      fprintf(2, "add: Incorrect input format.\n\
+There must be two numbers on a single line, separated by a single \
+whitespace, with no other characters such as trailing whitespaces.\n");
       exit(1);
     }
-    if (cc == 0) {
-      buf[i] = '\0';
-      break;
-    }
-    buf[i] = c;
+  } while (*(++s) != trailing);
+  return s;
+}
 
-    if (c == '\n' || c == '\r'){
-      buf[i] = '\0';
-      break;
-    }
-
-    if(first_ptr == NULL && is_digit(c)){
-      first_ptr = buf + i;
-      continue;
-    }
-    if(first_ptr != NULL && second_ptr == NULL && !is_digit(buf[i - 1]) && is_digit(c))
-      second_ptr = buf + i;
-  }
-  
+int main() {
+  const int BUFFER_SIZE = 512; 
+  char buf[BUFFER_SIZE + 1];
+  read_string(buf, BUFFER_SIZE);
   printf("|%s|\n", buf);
+  
+  const char *ptr = buf;
+  int first_sign = 1;
+  if (*ptr == '-') {
+      first_sign = -1;
+      ptr++;
+  }
+  const char *first_ptr = ptr;
 
-  int first = atoi(first_ptr);
-  int second = atoi(second_ptr);
-  int res = add(first, second);   // do syscall
-  printf("%d\n", res);
+  
+  ptr = parse_number(ptr, ' ');
+  
+  ++ptr;
+  
+  int second_sign = 1;
+  if (*ptr == '-') {
+      second_sign = -1;
+      ++ptr;
+  }
+  const char *second_ptr = ptr;
+
+  ptr = parse_number(ptr, '\0');
+
+  int first = atoi(first_ptr) * first_sign;
+  int second = atoi(second_ptr) * second_sign;
+  int sum = add(first, second);                   // do syscall
+  printf("%d\n", sum);
   exit(0);
 }
