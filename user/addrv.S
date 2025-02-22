@@ -2,7 +2,7 @@
 
 OUTPUT_FMT: .asciz "%d\n"
 #define MSG_FMT_LEN 2
-MSG_PARSE_ERROR: .asciz "addrv: Incorrect input format.\nThere must be two numbers on a single line, separated by a single whitespace, with no other characters such as trailing whitespaces.\n"
+MSG_PARSE_ERROR: .asciz "addrv: Parsing error on character %d \'%s\'. Incorrect input format.\nThere must be two numbers on a single line, separated by a single whitespace, with no other characters such as trailing whitespaces.\n"
 #define MSG_PARSE_ERROR_LEN 164
 MSG_READ_ERROR: .asciz "addrv: failed to read input\n"
 #define MSG_READ_ERROR_LEN 28
@@ -11,6 +11,8 @@ MSG_WRITE_ERROR: .asciz "addrv: failed to write the result\n"
 
 buf:
     .skip 512                           # Buffer (filled with zeros)
+parse_error_char:
+    .skip 2                             # String for error char (filled with zeros)
 
 .text                                   # Text (code) section
 .global main                            # Exportable object (label)
@@ -19,6 +21,7 @@ main:
     la      a0, buf                 # a0 = buf
     li      a1, 512                 # a1 = 512
     call    gets
+
     # check for return code
     beq     a0, zero, read_error    # if a0 == NULL then read_error
     mv      t0, a0                  # t0 = a0 (t0 stores second_ptr, a0 stores first_ptr)
@@ -95,45 +98,51 @@ end2:
     # compute answer
     add     a1, t5, t6;             # a1 = t5 + t6 = first + second
     la      a0, OUTPUT_FMT          # a0 = "%d\n"
-    call    printf                  # call printf (external symbol)
+    call    printf                  # call printf
 
     # check for return code
     blt     a0, zero, write_error   # if a0 < 0 then write_error
 
 exit:     
-    li a7, 2                        # exit system call
-    li a0, 0                        # exit status (success)
+    li      a7, 2                   # exit system call
+    li      a0, 0                   # exit status (success)
     ecall
 
 parse_error:
-    li a7, 16                       # Write syscall number
-    li a0, 2                        # stderr fd (2)
-    la a1, MSG_PARSE_ERROR          # Error message string address 
-    li a2, MSG_PARSE_ERROR_LEN      # Error message string length
-    ecall                           # Syscall
+    # .skip 2                             # skip 2 bytes for string with 1 character
+    la      t2, parse_error_char        # t2 = parse_error_char = {'\0', '\0'}
+    sb      t1, 0(t2)                   # *parse_error = *ptr
+    
+    li      a0, 2                       # stderr fd (2)
+    la      a1, MSG_PARSE_ERROR         # Error message string address 
+    la      a2, buf                     # a2 = buf
+    sub     a2, t0, a2                  # a2 = ptr - buf
+    addi    a2, a2, 1                   # a2 = ptr - buf + 1
+    mv      a3, t2                      # a3 = t2 = {*ptr, '\0'}
+    call    fprintf                     # fprintf(2, "add: Parsing error on character %d \'%s\'...", ptr - buf + 1, "*ptr\0")
 
-    li a7, 2                        # Exit system call
-    li a0, 1                        # Exit status (parse_error)
-    ecall                           # Syscall
+    li      a7, 2                       # Exit system call
+    li      a0, 1                       # Exit status (parse_error)
+    ecall                               # Syscall exit(1)
 
 read_error:
-    li a7, 16                       # Write syscall number
-    li a0, 2                        # stderr fd (2)
-    la a1, MSG_READ_ERROR          # Error message string address 
-    li a2, MSG_READ_ERROR_LEN      # Error message string length
-    ecall                           # Syscall
+    li      a7, 16                      # Write syscall number
+    li      a0, 2                       # stderr fd (2)
+    la      a1, MSG_READ_ERROR          # Error message string address 
+    li      a2, MSG_READ_ERROR_LEN      # Error message string length
+    ecall                               # Syscall write(2, MSG_READ_ERROR, MSG_READ_ERROR_LEN)
 
-    li a7, 2                        # Exit system call
-    li a0, 1                        # Exit status (read_error)
-    ecall    
+    li      a7, 2                       # Exit system call
+    li      a0, 1                       # Exit status (read_error)
+    ecall                               # Syscall exit(1)
 
 write_error:
-    li a7, 16                       # Write syscall number
-    li a0, 2                        # stderr fd (2)
-    la a1, MSG_WRITE_ERROR          # Error message string address 
-    li a2, MSG_WRITE_ERROR_LEN      # Error message string length
-    ecall                           # Syscall
+    li      a7, 16                      # Write syscall number
+    li      a0, 2                       # stderr fd (2)
+    la      a1, MSG_WRITE_ERROR         # Error message string address 
+    li      a2, MSG_WRITE_ERROR_LEN     # Error message string length
+    ecall                               # Syscall exit(1)
 
-    li a7, 2                        # Exit system call
-    li a0, 1                        # Exit status (write_error)
-    ecall                           # Syscall
+    li      a7, 2                       # Exit system call
+    li      a0, 1                       # Exit status (write_error)
+    ecall                               # Syscall exit(1)

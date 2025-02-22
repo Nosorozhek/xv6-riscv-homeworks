@@ -5,7 +5,7 @@ static int is_digit(char c) {
   return '0' <= c && c <= '9';
 }
 
-static int read_string(char* buffer, int buffer_size) {
+static int read_string(char *buffer, int buffer_size) {
   int i;
   char c;
   for (i = 0; i < buffer_size; ++i) {
@@ -27,12 +27,14 @@ static int read_string(char* buffer, int buffer_size) {
   return 0;
 } 
 
-static const char* parse_number(const char* s, char trailing) {
+static const char *parse_number(const char *begin, const char *s, char trailing) {
   do {
     if(!is_digit(*s)) {
-      fprintf(2, "add: Incorrect input format.\n\
+      char c[] = {*s, '\0'};
+      fprintf(2, "add: Parsing error on character %d \'%s\'. Incorrect input format.\n\
 There must be two numbers on a single line, separated by a single \
-whitespace, with no other characters such as trailing whitespaces.\n");
+whitespace, with no other characters such as trailing whitespaces.\n", 
+        (int)(s - begin + 1), c);
       exit(1);
     }
   } while (*(++s) != trailing);
@@ -54,7 +56,7 @@ int main() {
   const char *first_ptr = ptr;
 
   
-  ptr = parse_number(ptr, ' ');
+  ptr = parse_number(buf, ptr, ' ');
   
   ++ptr;
   
@@ -65,7 +67,7 @@ int main() {
   }
   const char *second_ptr = ptr;
 
-  ptr = parse_number(ptr, '\0');
+  ptr = parse_number(buf, ptr, '\0');
 
   int first = atoi(first_ptr) * first_sign;
   int second = atoi(second_ptr) * second_sign;
