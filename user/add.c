@@ -14,7 +14,7 @@ static int read_string(char *buffer, int buffer_size) {
       fprintf(2, "add: failed to read input\n");
       exit(1);
     } 
-    if (cc == 0 || c == '\n' || c == '\r')
+    if (cc == 0 || c == '\n')
       break;
 
     buffer[i] = c;
@@ -42,7 +42,7 @@ whitespace, with no other characters such as trailing whitespaces.\n",
 }
 
 int main() {
-  const int BUFFER_SIZE = 512; 
+  const int BUFFER_SIZE = 32; 
   char buf[BUFFER_SIZE + 1];
   read_string(buf, BUFFER_SIZE);
   printf("|%s|\n", buf);

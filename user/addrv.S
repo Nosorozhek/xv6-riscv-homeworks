@@ -10,7 +10,7 @@ MSG_WRITE_ERROR: .asciz "addrv: failed to write the result\n"
 #define MSG_WRITE_ERROR_LEN 34
 
 buf:
-    .skip 512                           # Buffer (filled with zeros)
+    .skip 32                            # Buffer (filled with zeros)
 parse_error_char:
     .skip 2                             # String for error char (filled with zeros)
 
@@ -19,7 +19,7 @@ parse_error_char:
 
 main:
     la      a0, buf                 # a0 = buf
-    li      a1, 512                 # a1 = 512
+    li      a1, 32                  # a1 = 32
     call    gets
 
     # check for return code
