@@ -1,41 +1,9 @@
 #include "kernel/types.h"
 #include "user/user.h"
 
-static int min(int x, int y) { return x < y ? x : y; }
+#define BUFFER_SIZE 3
 
-#define BUFFER_SIZE 512
-
-static void flush_buffer(int fd, char *buffer, int length) {
-  int bytes_written = 0;
-  while (bytes_written < length) {
-    int result = write(fd, buffer + bytes_written, length);
-    if (result < 0) {
-      fprintf(2, "argc: failed to write buffer into a pipe.\n");
-      exit(1);
-    }
-    bytes_written += result;
-  }
-}
-
-static void write_all(int fd, const char *data, int length, char *buffer,
-                      char **buffer_ptr) {
-  while (length) {
-    int remaining_space = BUFFER_SIZE - (*buffer_ptr - buffer);
-    if (remaining_space == 0) {
-      flush_buffer(fd, buffer, BUFFER_SIZE);
-      *buffer_ptr = buffer;
-      remaining_space = BUFFER_SIZE;
-    }
-
-    int copied_length = min(remaining_space, length);
-    memcpy(*buffer_ptr, (void *)data, copied_length);
-    length -= copied_length;
-    data += copied_length;
-    *buffer_ptr += copied_length;
-  }
-}
-
-int main(int argc, char **argv) {
+int main(const int argc, const char **argv) {
   int pipe_fd[2];
 
   if (pipe(pipe_fd) < 0) {
@@ -50,11 +18,31 @@ int main(int argc, char **argv) {
     exit(1);
 
   } else if (pid == 0) {
-    close(pipe_fd[1]);
+    if (close(pipe_fd[1])) {
+      fprintf(
+          2,
+          "argc: failed to close the pipe write end in the child process.\n");
+      exit(1);
+    }
 
-    close(0);
-    dup(pipe_fd[0]);
-    close(pipe_fd[0]);
+    if (close(0)) {
+      fprintf(2,
+              "argc: failed to close the standard input channel in the child "
+              "process.\n");
+      exit(1);
+    }
+    if (dup(pipe_fd[0]) < 0) {
+      fprintf(2,
+              "argc: failed to substitute the standard input channel with pipe "
+              "in the child process.\n");
+      exit(1);
+    }
+    if (close(pipe_fd[0])) {
+      fprintf(
+          2,
+          "argc: failed to close the pipe read end in the child process.\n");
+      exit(1);
+    }
 
     char *argv[] = {"/wc", 0};
     exec("/wc", argv);
@@ -62,28 +50,42 @@ int main(int argc, char **argv) {
     fprintf(2, "argc: failed to execute /wc.\n");
     exit(1);
   } else {
-    close(pipe_fd[0]);
-    char buffer[BUFFER_SIZE];
-    char *buffer_ptr = buffer;
+    if (close(pipe_fd[0])) {
+      fprintf(
+          2,
+          "argc: failed to close the pipe read end.\n");
+      exit(1);
+    }
 
     for (int i = 0; i < argc; ++i) {
-      int length = strlen(argv[i]);
-      write_all(pipe_fd[1], argv[i], length, buffer, &buffer_ptr);
+      int to_write = strlen(argv[i]);
+      int written = 0;
+      while (to_write > 0) {
+        written += write(pipe_fd[1], argv[i] + written, to_write);
+        if (written < 0) {
+          fprintf(2, "argc: failed to write into the pipe.\n");
+          exit(1);
+        }
+        to_write -= written;
+      }
       if (i < argc - 1) {
-        write_all(pipe_fd[1], " ", 1, buffer, &buffer_ptr);
+        written = write(pipe_fd[1], " ", 1);
       } else {
-        write_all(pipe_fd[1], "\n", 1, buffer, &buffer_ptr);
+        written = write(pipe_fd[1], "\n", 1);
+      }
+      if (written < 0) {
+        fprintf(2, "argc: failed to write into the pipe.\n");
+        exit(1);
       }
     }
-    flush_buffer(pipe_fd[1], buffer, buffer_ptr - buffer);
     if (close(pipe_fd[1])) {
-      fprintf(2, "argc: write error.\n");
+      fprintf(2, "argc: failed to close the pipe.\n");
       exit(1);
     }
     int exit_status;
     wait(&exit_status);
     if (exit_status != 0) {
-      fprintf(2, "argc: child exited with status %d", exit_status);
+      fprintf(2, "argc: child exited with status %d.", exit_status);
       exit(1);
     }
   }
