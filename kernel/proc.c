@@ -693,3 +693,43 @@ procdump(void)
     printf("\n");
   }
 }
+
+uint64
+sys_ps_listinfo(void) {
+  uint64 plist;
+  int lim;
+  argaddr(0, &plist);
+  argint(1, &lim);
+  int proc_count = 0;
+  struct proc *p;
+  struct procinfo current_proc_info;
+  for (p = proc; p < &proc[NPROC]; ++p) {
+    acquire(&p->lock);
+    if (p->state == USED || p->state == UNUSED) {
+      release(&p->lock);
+      continue;
+    }
+
+    if (++proc_count > lim || plist == 0) {
+      release(&p->lock);
+      continue;
+    }
+
+    current_proc_info.pid = p->pid;
+    strncpy(current_proc_info.name, p->name, sizeof(current_proc_info.name));
+    current_proc_info.state = p->state - 2;
+
+    acquire(&wait_lock);
+    current_proc_info.ppid = (p->parent) ? p->parent->pid : -1;
+    strncpy(current_proc_info.pname, (p->parent) ? p->parent->name : "", sizeof(current_proc_info.pname));
+    release(&wait_lock);
+    release(&p->lock);
+
+    if(copyout(myproc()->pagetable, plist, (char *) &current_proc_info, sizeof(current_proc_info)) < 0) {
+      return -1;
+    }
+    plist += sizeof(current_proc_info);
+  }
+
+  return proc_count;
+}
