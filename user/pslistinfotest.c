@@ -30,6 +30,7 @@ void test_buffer_size() {
     exit(1);
   } else {
     int result = ps_listinfo((char *)buffer, buffer_size);
+    free(buffer);
     assert(result > 2, "test_buffer_size");
     printf("pslistinfotest: [test_buffer_size] passed.\n");
   }
@@ -51,6 +52,7 @@ void test_correctness() {
     return;
   }
   int res = ps_listinfo((char *)buffer, buffer_size);
+  free(buffer);
   assert(res > 0 && res <= 64, "test_correctness");
   printf("pslistinfotest: [test_correctness] passed.\n");
 }
@@ -66,5 +68,6 @@ int main() {
   test_incorrect_address();
   test_correctness();
   test_count_processes();
+  printf("pslistinfotest: All tests passed.\n");
   exit(0);
 }

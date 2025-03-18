@@ -2,16 +2,27 @@
 #include "user/user.h"
 
 int main() {
-  const int buffer_size = 64;
-  struct procinfo *buffer = malloc(buffer_size * sizeof(struct procinfo));
-  if (buffer == 0) {
-    fprintf(2, "ps: failed to allocate enough memory for the buffer.\n");
-    exit(1);
-  }
-  int res = ps_listinfo((char *)buffer, buffer_size);
-  if (res < 0) {
-    fprintf(2, "ps: failed to get the list of processes.\n");
-    exit(1);
+  int buffer_size = 1;
+  struct procinfo *buffer;
+  int res = 0;
+  while (1) {
+    buffer = malloc(buffer_size * sizeof(struct procinfo));
+    if (buffer == 0) {
+      fprintf(2, "ps: failed to allocate enough memory for the buffer.\n");
+      exit(1);
+    }
+    res = ps_listinfo((char *)buffer, buffer_size);
+    if (res < 0) {
+      fprintf(2, "ps: failed to get the list of processes.\n");
+      exit(1);
+    }
+    
+    if (res <= buffer_size) {
+      break;
+    }
+
+    free(buffer);
+    buffer_size *= 2;
   }
 
   printf("PID\tNAME\tSTATE\t\tPPID\tPNAME\n");
@@ -31,8 +42,9 @@ int main() {
         pstate = "ZOMBIE\t";
         break;
     }
-    printf("%d\t%s\t%s\t%d\t%s\n", p->pid, p->name, pstate, p->ppid,
-           p->pname);
+    printf("%d\t%s\t%s\t%d\t%s\n", p->pid, p->name, pstate, p->ppid, p->pname);
   }
+
+  free(buffer);
   exit(0);
 }
