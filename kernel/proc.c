@@ -719,10 +719,17 @@ sys_ps_listinfo(void) {
     strncpy(current_proc_info.name, p->name, sizeof(current_proc_info.name));
     current_proc_info.state = p->state - 2;
 
-    acquire(&wait_lock);
-    current_proc_info.ppid = (p->parent) ? p->parent->pid : -1;
-    strncpy(current_proc_info.pname, (p->parent) ? p->parent->name : "", sizeof(current_proc_info.pname));
-    release(&wait_lock);
+    if(p->parent == 0) {
+      current_proc_info.ppid = -1;
+      strncpy(current_proc_info.pname, "", sizeof(current_proc_info.pname));
+    } else {
+      acquire(&wait_lock);
+      acquire(&p->parent->lock);
+      current_proc_info.ppid =  p->parent->pid;
+      strncpy(current_proc_info.pname, p->parent->name, sizeof(current_proc_info.pname));
+      release(&p->parent->lock);
+      release(&wait_lock);
+    }
     release(&p->lock);
 
     if(copyout(myproc()->pagetable, plist, (char *) &current_proc_info, sizeof(current_proc_info)) < 0) {
