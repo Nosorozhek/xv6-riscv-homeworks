@@ -353,6 +353,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page
+#define PTECOUNT 512 // number of PTEs per page table
 
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
@@ -362,8 +363,11 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PTE_W (1L << 2)
 #define PTE_X (1L << 3)
 #define PTE_U (1L << 4) // user can access
+#define PTE_G (1L << 5)
+#define PTE_A (1L << 6)
+#define PTE_D (1L << 7)
 
-// shift a physical address to the right place for a PTE.
+// shift a physical addresPGSIZE << (9 * level)s to the right place for a PTE.
 #define PA2PTE(pa) ((((uint64)pa) >> 12) << 10)
 
 #define PTE2PA(pte) (((pte) >> 10) << 12)
@@ -374,6 +378,7 @@ typedef uint64 *pagetable_t; // 512 PTEs
 #define PXMASK          0x1FF // 9 bits
 #define PXSHIFT(level)  (PGSHIFT+(9*(level)))
 #define PX(level, va) ((((uint64) (va)) >> PXSHIFT(level)) & PXMASK)
+#define PAGESIZE(level) (1 << PXSHIFT(level))
 
 // one beyond the highest possible virtual address.
 // MAXVA is actually one bit less than the max allowed by
