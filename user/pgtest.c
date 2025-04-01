@@ -60,6 +60,10 @@ void test_stack_array() {
   printf("\nAfter allocation:\n");
   pagedump(0, 0, 0);
 
+  pagereset(0, 0, 3);
+  printf("\nAfter resetting A/D bits:\n");
+  pagedump(0, 0, 0);
+
   stack_array[1] = 10;
   printf("\nAfter stack array element access (write):\n");
   pagedump(stack_array, sizeof(stack_array), 0);
@@ -84,7 +88,11 @@ void test_heap_array() {
   printf("\nAfter allocation:\n");
   pagedump(0, 0, 0);
 
-  heap_array[1] = 10;
+  pagereset(0, 0, 3);
+  printf("\nAfter resetting A/D bits:\n");
+  pagedump(0, 0, 0);
+
+  heap_array[4096 * 2] = 10;
   printf("\nAfter heap array element access (write):\n");
   pagedump(heap_array, heap_array_size, 0);
 
@@ -95,6 +103,14 @@ void test_heap_array() {
   global_var = heap_array[4096];
   printf("\nAfter heap array element access (read):\n");
   pagedump(heap_array, heap_array_size, 0);
+
+  pagereset(0, 0, 3);
+  printf("\nAfter resetting A/D bits:\n");
+  pagedump(0, 0, 0);
+
+  free(heap_array);
+  printf("\nAfter deallocation:\n");
+  pagedump(0, 0, 0);
 
   pagereset(0, 0, 3);  // clear A/D bits after test
 }
