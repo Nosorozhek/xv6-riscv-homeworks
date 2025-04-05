@@ -4,7 +4,7 @@
 static int using_synchronisation;
 static int mtx;
 
-void print_args(int argc, char** argv, int using_synchronisation) {
+void print_args(int argc, char** argv, int pid) {
   for (int i = 0; i < argc; ++i) {
     char s[2] = {'\0', '\0'};
     for (char* c = argv[i]; *c != '\0'; ++c) {
@@ -15,7 +15,7 @@ void print_args(int argc, char** argv, int using_synchronisation) {
           exit(1);
         }
       }
-      printf("pid: arg i, char \'%s\'\n", s);
+      printf("%d: arg %d, char \'%s\'\n", pid, i, s);
       if (using_synchronisation) {
         if (mutex_unlock(mtx)) {
           fprintf(2, "mutexsync: failed to unlock the mutex.\n");
@@ -27,11 +27,10 @@ void print_args(int argc, char** argv, int using_synchronisation) {
 }
 
 int main(int argc, char** argv) {
-  if (argc == 1) {
-    using_synchronisation = 0;
-  } else if (argc == 2 && !strcmp(argv[1], "--sync")) {
+  using_synchronisation = 0;
+  if (argc >= 2 && !strcmp(argv[1], "--sync")) {
     using_synchronisation = 1;
-  } else {
+  } else if (argc == 2 && !strcmp(argv[1], "--help")) {
     fprintf(2, "usage: mutexsync [--sync]\n");
     exit(1);
   }
@@ -50,9 +49,9 @@ int main(int argc, char** argv) {
     exit(1);
 
   } else if (pid == 0) {
-    print_args(argc, argv, using_synchronisation);
+    print_args(argc, argv, pid);
   } else {
-    print_args(argc, argv, using_synchronisation);
+    print_args(argc, argv, pid);
     wait(0);
   }
 
