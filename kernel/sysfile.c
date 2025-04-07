@@ -503,3 +503,64 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mutex(void)
+{
+  uint64 mutexfd; // user pointer to an integer
+  struct file *rf;
+  int fd;
+  struct proc *p = myproc();
+  argaddr(0, &mutexfd);
+  if(mutexalloc(&rf) < 0)
+    return -1;
+
+  if((fd = fdalloc(rf)) < 0){
+    fileclose(rf);
+    return -1;
+  }
+  if(copyout(p->pagetable, mutexfd, (char*)&fd, sizeof(fd)) < 0){
+    p->ofile[fd] = 0;
+    fileclose(rf);
+    return -1;
+  }
+  return 0;
+}
+
+uint64
+sys_mutex_lock(void)
+{
+  struct file *f;
+
+  if(argfd(0, 0, &f) < 0)
+    return -1;
+  if(holdingsleep(f->mutex)){
+    return -1;
+  }
+  acquiresleep(f->mutex);
+  return 0;
+}
+
+uint64
+sys_mutex_unlock(void)
+{
+  struct file *f;
+
+  if(argfd(0, 0, &f) < 0)
+    return -1;
+
+  if(!holdingsleep(f->mutex)){
+    return -1;
+  }
+  releasesleep(f->mutex);
+  return 0;
+}
+
+uint64
+sys_mutex_debug(void)
+{
+  int n;
+  argint(0, &n);
+  setmutexdebug(n);
+  return 0;
+}
