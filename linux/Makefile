@@ -1,0 +1,19 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -O2
+
+FIFO_FILE = fifo
+DEFINES = -DFIFO_FILE="\"$(FIFO_FILE)\""
+
+TARGET = echoserver
+SRC = echoserver.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) $(DEFINES) -o $@ $^
+
+clean:
+	rm -f $(TARGET)
+	rm -f $(FIFO_FILE)
