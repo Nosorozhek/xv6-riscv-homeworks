@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -O2
+CFLAGS = -Wall -Wextra -Werror -O2
 
 FIFO_FILE = fifo
 DEFINES = -DFIFO_FILE="\"$(FIFO_FILE)\""

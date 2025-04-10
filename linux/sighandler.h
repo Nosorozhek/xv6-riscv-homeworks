@@ -4,8 +4,6 @@
 #include <signal.h>
 #include <unistd.h>
 
-static int number_of_seconds = 0;
-
 volatile sig_atomic_t sigint_received = 0;
 volatile sig_atomic_t sigterm_received = 0;
 volatile sig_atomic_t sigalrm_received = 0;

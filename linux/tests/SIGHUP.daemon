@@ -1,0 +1,14 @@
+SIGHUP received. Demonizing the process.
+Process is daemonized.
+Server statistics
+Messages received: 0
+Bytes read:        0
+SIGUSR1 received. Printing server statistics.
+Server statistics
+Messages received: 1
+Bytes read:        10
+SIGALRM received. Server is working.
+SIGINT received. At the moment no data is being read. Terminating the process.
+Server statistics
+Messages received: 1
+Bytes read:        10

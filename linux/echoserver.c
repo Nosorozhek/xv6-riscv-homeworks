@@ -1,22 +1,25 @@
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <signal.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/select.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #include "sighandler.h"
 
 static int daemon_mode = 0;
-static char *output_file = NULL;
+static char *output_file = "echoserver.out";
+static char *log_file = "echoserver.log";
+static int number_of_seconds = 1;
 
 #ifndef FIFO_FILE
 #define FIFO_FILE ("fifo")
-#endif // FIFO_FILE
+#endif  // FIFO_FILE
 
 int parse_args(int argc, char *argv[]) {
   int opt;
@@ -25,16 +28,17 @@ int parse_args(int argc, char *argv[]) {
       {"help", 0, 0, 0}, {"daemon", 0, 0, 0}, {0, 0, 0, 0}};
 
   int index = 0;
-  while ((opt = getopt_long(argc, argv, "o:n:", long_options, &index)) != -1) {
+  while ((opt = getopt_long(argc, argv, "o:n:l:", long_options, &index)) !=
+         -1) {
     switch (opt) {
       case 0:
         if (strcmp("daemon", long_options[index].name) == 0) {
           daemon_mode = 1;
         } else if (strcmp("help", long_options[index].name) == 0) {
-          fprintf(
-              stdout,
-              "Usage: %s [--daemon] [-o output_file] [-n number_of_seconds]\n",
-              argv[0]);
+          fprintf(stdout,
+                  "Usage: %s [--daemon] [-o output file] [-n ping duration in "
+                  "seconds] [-l log file]\n",
+                  argv[0]);
           exit(EXIT_SUCCESS);
         }
         break;
@@ -44,50 +48,24 @@ int parse_args(int argc, char *argv[]) {
       case 'n':
         number_of_seconds = atoi(optarg);
         break;
+      case 'l':
+        log_file = optarg;
+        break;
       default:
-        fprintf(
-            stderr,
-            "Usage: %s [--daemon] [-o output_file] [-n number_of_seconds]\n",
-            argv[0]);
+        fprintf(stderr,
+                "Usage: %s [--daemon] [-o output file] [-n ping duration in "
+                "seconds] [-l log file]\n",
+                argv[0]);
         exit(EXIT_FAILURE);
     }
   }
   return 0;
 }
 
-int daemonize() {
-  int output_fd = creat(output_file, DEFFILEMODE);
-  if (output_fd < 0) {
-    fprintf(stderr, "Failed to open %s: %s", output_file, strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  if (dup2(output_fd, STDOUT_FILENO) == -1) {
-    perror("Failed to redirect stdout to output file");
-    exit(EXIT_FAILURE);
-  }
-  if (dup2(output_fd, STDERR_FILENO) == -1) {
-    perror("Failed to redirect stdout to output file");
-    exit(EXIT_FAILURE);
-  }
-
-  // Do not change the working directory because this will change the path to
-  // the fifo file. Do not close the file descriptors because they are inherited
-  // by the daemonized process.
-  if (daemon(1, 1)) {
-    perror("Failed to demonize the process");
-    exit(EXIT_FAILURE);
-  }
-
-  // Restart the alarm because it is not inherited by children created via fork,
-  // so it is not expected to be inherited by the daemonized process.
-  alarm(number_of_seconds);
-
-  return 0;
-}
-
 static size_t messages_count = 0;
 static size_t bytes_count = 0;
+
+void process_interrupt(int fifo_fd);
 
 void print_statistics() {
   printf("Server statistics\nMessages received: %zu\nBytes read:        %zu\n",
@@ -95,52 +73,124 @@ void print_statistics() {
   sigalrm_received = 0;
 }
 
-int have_to_exit = 0;
+#define print_safe(string)                 \
+  while (printf(string) < 0) {             \
+    if (errno != EINTR) {                  \
+      perror("Failed to print to stdout"); \
+      exit(EXIT_FAILURE);                  \
+    }                                      \
+    process_interrupt(fifo_fd);            \
+  }
+
+int daemonize(int fifo_fd) {
+  int output_fd;
+  while ((output_fd = creat(output_file, DEFFILEMODE)) < 0) {
+    if (errno != EINTR) {
+      fprintf(stderr, "Failed to open %s: %s", output_file, strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+    process_interrupt(fifo_fd);
+  }
+
+  while (dup2(output_fd, STDOUT_FILENO) == -1) {
+    if (errno != EINTR) {
+      perror("Failed to redirect stdout to output file");
+      exit(EXIT_FAILURE);
+    }
+    process_interrupt(fifo_fd);
+  }
+  while (dup2(output_fd, STDERR_FILENO) == -1) {
+    if (errno != EINTR) {
+      perror("Failed to redirect stdout to output file");
+      exit(EXIT_FAILURE);
+    }
+    process_interrupt(fifo_fd);
+  }
+
+  // Do not change the working directory because this will change the path to
+  // the fifo file. Do not close the file descriptors because they are inherited
+  // by the daemonized process.
+  while (daemon(1, 1)) {
+    if (errno != EINTR) {
+      perror("Failed to demonize the process");
+      exit(EXIT_FAILURE);
+    }
+    process_interrupt(fifo_fd);
+  }
+
+  // Restart the alarm because it is not inherited by children created via fork,
+  // so it is not expected to be inherited by the daemonized process.
+  alarm(number_of_seconds);
+
+  print_safe("Process is daemonized.\n");
+  print_statistics();
+
+  return 0;
+}
+
+static int have_to_exit = 0;
+
+void close_fifo(int fifo_fd) {
+  while (close(fifo_fd) == -1) {
+    if (errno != EINTR) {
+      perror("Failed to close fifo file");
+      exit(EXIT_FAILURE);
+    }
+    process_interrupt(fifo_fd);
+  }
+}
 
 void process_interrupt(int fifo_fd) {
   if (sigint_received) {
     sigint_received = 0;
     if (fifo_fd == -1) {
-      printf(
+      print_safe(
           "SIGINT received. At the moment no data is being read. "
           "Terminating the process.\n");
       print_statistics();
       exit(EXIT_FAILURE);
     }
-    printf(
+    print_safe(
         "SIGINT received. The process will be read to the end, after "
         "which the process will be terminated.\n");
     have_to_exit = 1;
   }
   if (sigterm_received) {
     sigterm_received = 0;
-    printf("SIGTERM received. Terminating the process.\n");
+    print_safe("SIGTERM received. Terminating the process.\n");
+    if (fifo_fd != -1) {
+      close_fifo(fifo_fd);
+    }
     print_statistics();
     exit(EXIT_FAILURE);
   }
   if (sigalrm_received) {
     sigalrm_received = 0;
     alarm(number_of_seconds);
-    printf("SIGALRM received. Server is working.\n");
+    print_safe("SIGALRM received. Server is working.\n");
   }
   if (sighup_received) {
     sighup_received = 0;
     if (!daemon_mode) {
-      printf("SIGHUP received. Daemonizing the process.\n");
       daemon_mode = 1;
-      daemonize();
+      print_safe("SIGHUP received. Demonizing the process.\n");
+      daemonize(fifo_fd);
     } else {
-      printf("SIGHUP received. Process is already a daemon.\n");
+      print_safe("SIGHUP received. Process is already a daemon.\n");
     }
   }
   if (sigusr1_received) {
     sigusr1_received = 0;
-    printf("SIGUSR1 received. Printing server statistics.\n");
+    print_safe("SIGUSR1 received. Printing server statistics.\n");
     print_statistics();
   }
 }
 
+static int log_fd;
+
 void process_data() {
+  process_interrupt(-1);
+
   int fifo_fd;
   while ((fifo_fd = open(FIFO_FILE, O_RDONLY)) == -1) {
     if (errno != EINTR) {
@@ -148,34 +198,52 @@ void process_data() {
       exit(EXIT_FAILURE);
     }
     process_interrupt(fifo_fd);
+    if (have_to_exit) {
+      return;
+    }
   }
 
-  char buffer[1025];
-  ssize_t bytes_read;
-
-  do {
-    bytes_read = read(fifo_fd, buffer, sizeof(buffer) - 1);
+  bool is_eof = false;
+  char last_char = '\0';
+  while (!is_eof) {
+    char buffer[1024];
+    ssize_t bytes_read = read(fifo_fd, buffer, sizeof(buffer) - 1);
     if (bytes_read == -1) {
       if (errno != EINTR) {
         perror("Failed to read from fifo file");
         exit(EXIT_FAILURE);
       }
       process_interrupt(fifo_fd);
-    } else if (bytes_read > 0) {
-      bytes_count += bytes_read;
-      printf(">> %s", buffer);
+      continue;
+    } else if (bytes_read == 0) {
+      ++messages_count;
+      is_eof = true;
     }
-  } while (bytes_read > 0);
+    bytes_count += bytes_read;
 
-  int close_result;
-  while ((close_result = close(fifo_fd)) == -1) {
-    if (errno != EINTR) {
-      perror("Failed to close fifo file");
-      exit(EXIT_FAILURE);
+    if (!is_eof) {
+      last_char = buffer[bytes_read - 1];
+    } else if(last_char != '\n') {
+      buffer[bytes_read++] = '\n';
     }
-    process_interrupt(fifo_fd);
+
+    char *buffer_begin = buffer;
+    while (bytes_read > 0) {
+      ssize_t bytes_written = write(log_fd, buffer_begin, bytes_read);
+      if (bytes_written == -1) {
+        if (errno != EINTR) {
+          perror("Failed to write to stdout");
+          exit(EXIT_FAILURE);
+        }
+        process_interrupt(fifo_fd);
+      } else {
+        bytes_read -= bytes_written;
+        buffer_begin += bytes_written;
+      }
+    }
   }
-  ++messages_count;
+
+  close_fifo(fifo_fd);
 }
 
 void create_fifo() {
@@ -198,19 +266,47 @@ void create_fifo() {
   }
 }
 
+void open_log_file() {
+  while ((log_fd = creat(log_file, DEFFILEMODE)) == -1) {
+    if (errno != EINTR) {
+      perror("Failed to open log file");
+      exit(EXIT_FAILURE);
+    }
+    process_interrupt(log_fd);
+    if (have_to_exit) {
+      return;
+    }
+  }
+}
+
+void close_log_file() {
+  while (close(log_fd) == -1) {
+    if (errno != EINTR) {
+      perror("Failed to close log file");
+      exit(EXIT_FAILURE);
+    }
+    process_interrupt(log_fd);
+  }
+}
+
 int main(int argc, char **argv) {
   parse_args(argc, argv);
+  ;
+  alarm(number_of_seconds);
   register_sighandler();
-  create_fifo();
+
   if (daemon_mode) {
-    daemonize();
+    daemonize(-1);
   }
 
-  alarm(number_of_seconds);
+  create_fifo();
 
+  open_log_file();
   while (!have_to_exit) {
     process_data();
   }
+  close_log_file();
+
   printf("Terminating the process.\n");
   print_statistics();
   return 0;
