@@ -1,0 +1,5 @@
+SIGALRM received. Server is working.
+SIGINT received. At the moment no data is being read. Terminating the process.
+Server statistics
+Messages received: 0
+Bytes read:        0

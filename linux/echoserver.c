@@ -82,7 +82,7 @@ void print_statistics() {
     process_interrupt(fifo_fd);            \
   }
 
-int daemonize(int fifo_fd) {
+int daemonize(const int fifo_fd) {
   int output_fd;
   while ((output_fd = creat(output_file, DEFFILEMODE)) < 0) {
     if (errno != EINTR) {
@@ -91,6 +91,25 @@ int daemonize(int fifo_fd) {
     }
     process_interrupt(fifo_fd);
   }
+
+    // Fflush stdout and stderr buffers before dup2, because sometimes
+    // they might be printed into the output file after dup2.
+    // Btw man page says that dup2 calls close so it should fflush
+    // stdout before dup, but it doesn't happen in my test.
+    while(fflush(stdout)) {
+      if (errno != EINTR) {
+        perror("Failed to fflush stdout");
+        exit(EXIT_FAILURE);
+      }
+      process_interrupt(fifo_fd);
+    }
+    while(fflush(stderr)) {
+      if(errno != EINTR) {
+        perror("Failed to fflush stderr");
+        exit(EXIT_FAILURE);
+      }
+      process_interrupt(fifo_fd);
+    }
 
   while (dup2(output_fd, STDOUT_FILENO) == -1) {
     if (errno != EINTR) {
@@ -101,7 +120,7 @@ int daemonize(int fifo_fd) {
   }
   while (dup2(output_fd, STDERR_FILENO) == -1) {
     if (errno != EINTR) {
-      perror("Failed to redirect stdout to output file");
+      perror("Failed to redirect stderr to output file");
       exit(EXIT_FAILURE);
     }
     process_interrupt(fifo_fd);
@@ -130,7 +149,7 @@ int daemonize(int fifo_fd) {
 
 static int have_to_exit = 0;
 
-void close_fifo(int fifo_fd) {
+void close_fifo(const int fifo_fd) {
   while (close(fifo_fd) == -1) {
     if (errno != EINTR) {
       perror("Failed to close fifo file");
@@ -140,7 +159,7 @@ void close_fifo(int fifo_fd) {
   }
 }
 
-void process_interrupt(int fifo_fd) {
+void process_interrupt(const int fifo_fd) {
   if (sigint_received) {
     sigint_received = 0;
     if (fifo_fd == -1) {
