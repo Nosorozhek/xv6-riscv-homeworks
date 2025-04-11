@@ -2,7 +2,6 @@
 #define SIGHANDLER_H
 
 #include <signal.h>
-#include <unistd.h>
 
 volatile sig_atomic_t sigint_received = 0;
 volatile sig_atomic_t sigterm_received = 0;

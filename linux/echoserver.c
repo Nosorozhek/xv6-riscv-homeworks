@@ -15,7 +15,7 @@
 static int daemon_mode = 0;
 static char *output_file = "echoserver.out";
 static char *log_file = "echoserver.log";
-static int number_of_seconds = 1;
+static int ping_duration = 1;
 
 #ifndef FIFO_FILE
 #define FIFO_FILE ("fifo")
@@ -46,7 +46,7 @@ int parse_args(int argc, char *argv[]) {
         output_file = optarg;
         break;
       case 'n':
-        number_of_seconds = atoi(optarg);
+        ping_duration = atoi(optarg);
         break;
       case 'l':
         log_file = optarg;
@@ -139,7 +139,7 @@ int daemonize(const int fifo_fd) {
 
   // Restart the alarm because it is not inherited by children created via fork,
   // so it is not expected to be inherited by the daemonized process.
-  alarm(number_of_seconds);
+  alarm(ping_duration);
 
   print_safe("Process is daemonized.\n");
   print_statistics();
@@ -185,7 +185,7 @@ void process_interrupt(const int fifo_fd) {
   }
   if (sigalrm_received) {
     sigalrm_received = 0;
-    alarm(number_of_seconds);
+    alarm(ping_duration);
     print_safe("SIGALRM received. Server is working.\n");
   }
   if (sighup_received) {
@@ -311,7 +311,7 @@ void close_log_file() {
 int main(int argc, char **argv) {
   parse_args(argc, argv);
   ;
-  alarm(number_of_seconds);
+  alarm(ping_duration);
   register_sighandler();
 
   if (daemon_mode) {
