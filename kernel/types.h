@@ -8,3 +8,5 @@ typedef unsigned int  uint32;
 typedef unsigned long uint64;
 
 typedef uint64 pde_t;
+
+enum pageflag { DIRTY_PAGE = 1, ACCESSED_PAGE = 2 };

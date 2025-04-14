@@ -39,6 +39,7 @@ char *format_index(char *buffer, uint64 index) {
 
 void print_reqursive(pagetable_t pagetable, uint64 va, uint64 last_va,
                      int level, int flags_mask) {
+  last_va = PGROUNDUPLVL(level, last_va);
   pte_t *pte = pagetable + PX(level, va);
   for (; va < last_va && pte < pagetable + PTECOUNT; va += PAGESIZE(level), ++pte) {
     
@@ -100,6 +101,7 @@ uint64 sys_pagedump(void) {
 
 void reset_reqursive(pagetable_t pagetable, uint64 va, uint64 last_va,
                      int level, int flags_mask) {
+  last_va = PGROUNDUPLVL(level, last_va);
   pte_t *pte = pagetable + PX(level, va);
   for (; va < last_va && pte < pagetable + PTECOUNT; va += PAGESIZE(level), ++pte) {
     
@@ -136,11 +138,11 @@ uint64 sys_pagereset(void) {
   int flags_mask;
   argint(2, &flags_mask);
 
-  if (flags_mask == 1) {
+  if (flags_mask == DIRTY_PAGE) {
     flags_mask = PTE_D;
-  } else if (flags_mask == 2) {
+  } else if (flags_mask == ACCESSED_PAGE) {
     flags_mask = PTE_A;
-  } else if (flags_mask == 3) {
+  } else if (flags_mask == (DIRTY_PAGE | ACCESSED_PAGE)) {
     flags_mask = PTE_D | PTE_A;
   } else {
     return -1;
