@@ -117,11 +117,11 @@ urandomread(int user_dst, uint64 dst, int n, short minor) {
       return -1;
     }
     urandom_ptr += len;
-    n -= len;
+    n -= (int) len;
   }
   releasesleep(&urandom_lock);
 
-  return target - n;
+  return (int) target - n;
 }
 
 static uint64 bytes_read = 0;
@@ -147,11 +147,13 @@ nullstatread(int user_dst, uint64 dst, int n, short minor) {
   }
 
   acquiresleep(&nullstat_lock);
+  uint64 bytes = bytes_read;
+  releasesleep(&nullstat_lock);
+
   int result = n;
-  if (either_copyout(user_dst, dst, &bytes_read, sizeof(uint64)) == -1) {
+  if (either_copyout(user_dst, dst, &bytes, sizeof(uint64)) == -1) {
     result = 0;
   }
-  releasesleep(&nullstat_lock);
 
   return result;
 }
