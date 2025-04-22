@@ -142,6 +142,7 @@ UPROGS=\
 	$U/_zombie\
 	$U/_head\
 	$U/_hexdump\
+	$U/_write\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
