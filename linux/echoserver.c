@@ -25,7 +25,8 @@ int parse_args(int argc, char *argv[]) {
   int opt;
 
   static struct option long_options[] = {
-      {"help", 0, 0, 0}, {"daemon", 0, 0, 0}, {0, 0, 0, 0}};
+    {"help", 0, 0, 0}, {"daemon", 0, 0, 0}, {0, 0, 0, 0}
+  };
 
   int index = 0;
   while ((opt = getopt_long(argc, argv, "o:n:l:", long_options, &index)) !=
@@ -82,60 +83,34 @@ void print_statistics() {
     process_interrupt(fifo_fd);            \
   }
 
+#define with_interrupt_check(operation, message) \
+  while (operation) {                            \
+    if (errno != EINTR) {                        \
+      perror(message);                           \
+      exit(EXIT_FAILURE);                        \
+    }                                            \
+    process_interrupt(fifo_fd);                  \
+  }
+
 int daemonize(const int fifo_fd) {
   int output_fd;
-  while ((output_fd = creat(output_file, DEFFILEMODE)) < 0) {
-    if (errno != EINTR) {
-      fprintf(stderr, "Failed to open %s: %s", output_file, strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-    process_interrupt(fifo_fd);
-  }
+  with_interrupt_check((output_fd = creat(output_file, DEFFILEMODE)) < 0,
+                 "Failed to open output file");
 
-    // Fflush stdout and stderr buffers before dup2, because sometimes
-    // they might be printed into the output file after dup2.
-    // Btw man page says that dup2 calls close so it should fflush
-    // stdout before dup, but it doesn't happen in my test.
-    while(fflush(stdout)) {
-      if (errno != EINTR) {
-        perror("Failed to fflush stdout");
-        exit(EXIT_FAILURE);
-      }
-      process_interrupt(fifo_fd);
-    }
-    while(fflush(stderr)) {
-      if(errno != EINTR) {
-        perror("Failed to fflush stderr");
-        exit(EXIT_FAILURE);
-      }
-      process_interrupt(fifo_fd);
-    }
+  // Fflush stdout and stderr buffers before dup2, because sometimes
+  // they might be printed into the output file after dup2.
+  // Btw man page says that dup2 calls close so it should fflush
+  // stdout before dup, but it doesn't happen in my test.
+  with_interrupt_check(fflush(stdout), "Failed to fflush stdout");
+  with_interrupt_check(fflush(stderr), "Failed to fflush stderr");
 
-  while (dup2(output_fd, STDOUT_FILENO) == -1) {
-    if (errno != EINTR) {
-      perror("Failed to redirect stdout to output file");
-      exit(EXIT_FAILURE);
-    }
-    process_interrupt(fifo_fd);
-  }
-  while (dup2(output_fd, STDERR_FILENO) == -1) {
-    if (errno != EINTR) {
-      perror("Failed to redirect stderr to output file");
-      exit(EXIT_FAILURE);
-    }
-    process_interrupt(fifo_fd);
-  }
+  with_interrupt_check(dup2(output_fd, STDOUT_FILENO) == -1, "Failed to redirect stdout to output file");
+  with_interrupt_check(dup2(output_fd, STDERR_FILENO) == -1, "Failed to redirect stderr to output file");
 
   // Do not change the working directory because this will change the path to
   // the fifo file. Do not close the file descriptors because they are inherited
   // by the daemonized process.
-  while (daemon(1, 1)) {
-    if (errno != EINTR) {
-      perror("Failed to demonize the process");
-      exit(EXIT_FAILURE);
-    }
-    process_interrupt(fifo_fd);
-  }
+  with_interrupt_check(daemon(1, 1), "Failed to demonize the process");
 
   // Restart the alarm because it is not inherited by children created via fork,
   // so it is not expected to be inherited by the daemonized process.
@@ -147,16 +122,11 @@ int daemonize(const int fifo_fd) {
   return 0;
 }
 
+
 static int have_to_exit = 0;
 
 void close_fifo(const int fifo_fd) {
-  while (close(fifo_fd) == -1) {
-    if (errno != EINTR) {
-      perror("Failed to close fifo file");
-      exit(EXIT_FAILURE);
-    }
-    process_interrupt(fifo_fd);
-  }
+  with_interrupt_check(close(fifo_fd) == -1, "Failed to close fifo file");
 }
 
 void process_interrupt(const int fifo_fd) {
@@ -164,14 +134,14 @@ void process_interrupt(const int fifo_fd) {
     sigint_received = 0;
     if (fifo_fd == -1) {
       print_safe(
-          "SIGINT received. At the moment no data is being read. "
-          "Terminating the process.\n");
+        "SIGINT received. At the moment no data is being read. "
+        "Terminating the process.\n");
       print_statistics();
       exit(EXIT_FAILURE);
     }
     print_safe(
-        "SIGINT received. The process will be read to the end, after "
-        "which the process will be terminated.\n");
+      "SIGINT received. The process will be read to the end, after "
+      "which the process will be terminated.\n");
     have_to_exit = 1;
   }
   if (sigterm_received) {
@@ -205,6 +175,13 @@ void process_interrupt(const int fifo_fd) {
   }
 }
 
+#define check_interrupt(message) \
+  if (errno != EINTR) {          \
+    perror(message);             \
+    exit(EXIT_FAILURE);          \
+  }                              \
+  process_interrupt(fifo_fd);
+
 static int log_fd;
 
 void process_data() {
@@ -212,11 +189,7 @@ void process_data() {
 
   int fifo_fd;
   while ((fifo_fd = open(FIFO_FILE, O_RDONLY)) == -1) {
-    if (errno != EINTR) {
-      perror("Failed to open fifo file");
-      exit(EXIT_FAILURE);
-    }
-    process_interrupt(fifo_fd);
+    check_interrupt("Failed to open fifo file");
     if (have_to_exit) {
       return;
     }
@@ -228,13 +201,10 @@ void process_data() {
     char buffer[1024];
     ssize_t bytes_read = read(fifo_fd, buffer, sizeof(buffer) - 1);
     if (bytes_read == -1) {
-      if (errno != EINTR) {
-        perror("Failed to read from fifo file");
-        exit(EXIT_FAILURE);
-      }
-      process_interrupt(fifo_fd);
+      check_interrupt("Failed to read from fifo file")
       continue;
-    } else if (bytes_read == 0) {
+    }
+    if (bytes_read == 0) {
       ++messages_count;
       is_eof = true;
     }
@@ -242,7 +212,7 @@ void process_data() {
 
     if (!is_eof) {
       last_char = buffer[bytes_read - 1];
-    } else if(last_char != '\n') {
+    } else if (last_char != '\n') {
       buffer[bytes_read++] = '\n';
     }
 
@@ -250,15 +220,16 @@ void process_data() {
     while (bytes_read > 0) {
       ssize_t bytes_written = write(log_fd, buffer_begin, bytes_read);
       if (bytes_written == -1) {
-        if (errno != EINTR) {
-          perror("Failed to write to stdout");
-          exit(EXIT_FAILURE);
-        }
-        process_interrupt(fifo_fd);
+        check_interrupt("Failed to write to log file");
       } else {
         bytes_read -= bytes_written;
         buffer_begin += bytes_written;
       }
+    }
+
+    process_interrupt(fifo_fd);
+    if (have_to_exit) {
+      break;
     }
   }
 
@@ -291,7 +262,7 @@ void open_log_file() {
       perror("Failed to open log file");
       exit(EXIT_FAILURE);
     }
-    process_interrupt(log_fd);
+    process_interrupt(-1);
     if (have_to_exit) {
       return;
     }
@@ -304,13 +275,12 @@ void close_log_file() {
       perror("Failed to close log file");
       exit(EXIT_FAILURE);
     }
-    process_interrupt(log_fd);
+    process_interrupt(-1);
   }
 }
 
 int main(int argc, char **argv) {
-  parse_args(argc, argv);
-  ;
+  parse_args(argc, argv);;
   alarm(ping_duration);
   register_sighandler();
 

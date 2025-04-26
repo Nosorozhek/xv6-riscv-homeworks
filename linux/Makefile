@@ -5,7 +5,7 @@ FIFO_FILE = fifo
 DEFINES = -DFIFO_FILE="\"$(FIFO_FILE)\""
 
 TARGET = echoserver
-SRC = echoserver.c
+SRC = echoserver.c sighandler.c
 
 .PHONY: all clean
 
