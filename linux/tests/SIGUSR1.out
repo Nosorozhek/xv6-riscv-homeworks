@@ -1,0 +1,8 @@
+SIGUSR1 received. Printing server statistics.
+Server statistics
+Messages received: 1
+Bytes read:        13
+SIGTERM received. Terminating the process.
+Server statistics
+Messages received: 2
+Bytes read:        25

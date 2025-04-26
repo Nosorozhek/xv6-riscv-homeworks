@@ -1,0 +1,8 @@
+Process is daemonized.
+Server statistics
+Messages received: 1
+Bytes read:        10
+SIGINT received. At the moment no data is being read. Terminating the process.
+Server statistics
+Messages received: 2
+Bytes read:        20

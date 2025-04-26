@@ -1,0 +1,5 @@
+SIGUSR1 received. Printing server statistics.
+Server statistics
+Messages received: 1
+Bytes read:        10
+SIGHUP received. Demonizing the process.
