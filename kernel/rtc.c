@@ -3,10 +3,12 @@
 #include "riscv.h"
 #include "defs.h"
 
-#define RTCWord(word)
-#define ReadRTCLow (*((volatile uint32 *)(RTC_LOW)))
-#define ReadRTCHigh (*((volatile uint32 *)(RTC_HIGH)))
+#define ReadRTC(word) (*((volatile uint32 *)(word)))
 
 uint64 rtcread(void) {
-  return ((uint64)ReadRTCHigh << 32) + ReadRTCLow;
+  // read low register first
+  const uint32 low = ReadRTC(RTC_LOW);
+  const uint32 high = ReadRTC(RTC_HIGH);
+
+  return ((uint64)high << 32) | low;
 }
