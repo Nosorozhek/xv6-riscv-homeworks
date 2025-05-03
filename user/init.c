@@ -16,6 +16,11 @@ main(void)
 {
   int pid, wpid;
 
+  mknod("null", MEM, DEV_NULL);
+  mknod("zero", MEM, DEV_ZERO);
+  mknod("urandom", MEM, DEV_URANDOM);
+  mknod("nullstat", MEM, DEV_NULLSTAT);
+
   if(open("console", O_RDWR) < 0){
     mknod("console", CONSOLE, 0);
     open("console", O_RDWR);
