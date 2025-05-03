@@ -17,7 +17,8 @@ void print_hex_addr(uint addr) {
 }
 
 void print_word(uint16 x) {
-  char word[] = {digits[x >> 12 & 0xf], digits[x >> 8 & 0xf], digits[x >> 4 & 0xf], digits[x & 0xf], 0};
+  char word[] = {digits[x >> 12 & 0xf], digits[x >> 8 & 0xf],
+                 digits[x >> 4 & 0xf], digits[x & 0xf], 0};
   printf("%s ", word);
 }
 
@@ -44,7 +45,7 @@ int main(int argc, char *argv[]) {
     print_hex_addr(addr);
 
     for (i = 0; i + 2 <= n; i += 2) {
-      uint16 word = *(uint16 *) (buf + i);
+      uint16 word = *(uint16 *)(buf + i);
       print_word(word);
     }
 
@@ -55,9 +56,16 @@ int main(int argc, char *argv[]) {
     printf("\n");
     addr += n;
   }
+  if (n < 0) {
+    fprintf(2, "hexdump: failed to read from %s\n", argv[1]);
+    exit(1);
+  }
   print_hex_addr(addr);
   printf("\n");
 
-  close(fd);
+  if (close(fd)) {
+    fprintf(2, "hexdump: failed to close %s\n", argv[1]);
+    exit(1);
+  }
   exit(0);
 }

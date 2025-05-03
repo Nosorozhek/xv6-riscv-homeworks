@@ -32,16 +32,10 @@ zerowrite(int user_src, uint64 src, int n, short minor) {
 }
 
 #define BUF_SIZE 1024
+char buf[BUF_SIZE] = {0};
 
 static int
 zeroread(int user_dst, uint64 dst, int n, short minor) {
-  if (n < 0) {
-    return -1;
-  }
-  char buf[BUF_SIZE];
-  for (char *p = buf; p != buf + BUF_SIZE; ++p) {
-    *p = 0;
-  }
   if (n < 0) {
     return -1;
   }
