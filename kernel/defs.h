@@ -108,6 +108,7 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 
 // rtc.c
+void            rtcinit(void);
 uint64          rtcread(void);
 
 // swtch.S
