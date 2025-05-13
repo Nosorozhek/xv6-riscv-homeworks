@@ -21,6 +21,10 @@
 #define UART0 0x10000000L
 #define UART0_IRQ 10
 
+// qemu puts RTC registers here in physical memory.
+#define RTC_LOW 0x101000
+#define RTC_HIGH 0x101004
+
 // virtio mmio interface
 #define VIRTIO0 0x10001000
 #define VIRTIO0_IRQ 1
