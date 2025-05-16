@@ -37,7 +37,7 @@ do
 done
 
 sudo head -c 6 /dev/urandom > ext2fs/${files[0]}    # small
-sudo head -c 4K /dev/urandom > ext2fs/${files[1]}   # medium
+sudo head -c 22K /dev/urandom > ext2fs/${files[1]}  # medium
 sudo head -c 20M /dev/urandom > ext2fs/${files[2]}  # large
 sudo truncate -s 1G ext2fs/${files[3]}              # sparse
 
