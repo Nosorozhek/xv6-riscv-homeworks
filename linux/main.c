@@ -68,10 +68,17 @@ static int64_t block_size;
 void *block_data = NULL;
 int is_filled_with_zeros = 0;
 
-static int process_block(int64_t data_size, uint32_t block_address) {
+uint64_t remained_file_size;
+
+static int process_block(uint32_t block_address) {
     if (print_block_address) {
         printf("block %d:\t%u\n", visited_blocks, block_address);
         return 0;
+    }
+
+    uint64_t data_size = block_size;
+    if (data_size > remained_file_size) {
+        data_size = (int64_t) remained_file_size;
     }
 
     if (block_data == NULL) {
@@ -93,6 +100,7 @@ static int process_block(int64_t data_size, uint32_t block_address) {
             perror("Failed to write block of data");
             return -1;
         }
+        remained_file_size -= data_size;
         return 0;
     }
 
@@ -103,7 +111,7 @@ static int process_block(int64_t data_size, uint32_t block_address) {
 
     is_filled_with_zeros = 0;
 
-    ssize_t res = fread(block_data, data_size, 1, fd);
+    size_t res = fread(block_data, data_size, 1, fd);
     if (res != 1 && data_size > 0) {
         perror("Failed to read block of data");
         return -1;
@@ -113,11 +121,11 @@ static int process_block(int64_t data_size, uint32_t block_address) {
         perror("Failed to write block of data");
         return -1;
     }
+    remained_file_size -= data_size;
     return 0;
 }
 
-static int process_indirect_block(uint32_t block_num, int level, uint32_t block_count,
-                                  uint32_t pointers_in_block, uint64_t file_size) {
+static int process_indirect_block(uint32_t block_num, int level, uint32_t block_count, uint32_t pointers_in_block) {
     if (visited_blocks >= block_count) {
         return 0;
     }
@@ -152,25 +160,15 @@ static int process_indirect_block(uint32_t block_num, int level, uint32_t block_
 
     int result = 0;
 
-    if (level == 0) {
-        for (uint32_t i = 0; i < pointers_in_block && visited_blocks < block_count; i++, (visited_blocks)++) {
-            uint32_t data_size = block_size;
-            if (file_size < data_size) {
-                data_size = file_size;
-            }
-            result = process_block(data_size, block_data[i]);
-            if (result < 0) {
-                break;
-            }
-            file_size -= data_size;
+    for (uint32_t i = 0; i < pointers_in_block && visited_blocks < block_count; i++) {
+        if (level == 0) {
+            ++visited_blocks;
+            result = process_block(block_data[i]);
+        } else {
+            result = process_indirect_block(block_data[i], level - 1, block_count, pointers_in_block);
         }
-    } else {
-        for (uint32_t i = 0; i < pointers_in_block && visited_blocks < block_count; i++) {
-            result = process_indirect_block(block_data[i], level - 1,
-                                            block_count, pointers_in_block, file_size);
-            if (result < 0) {
-                break;
-            }
+        if (result < 0) {
+            break;
         }
     }
 
@@ -277,13 +275,9 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-
+    remained_file_size = file_size;
     for (; visited_blocks < N_DIRECT_BLOCK_POINTERS && visited_blocks < block_count; ++visited_blocks) {
-        uint32_t data_size = block_size;
-        if (file_size < data_size) {
-            data_size = file_size;
-        }
-        if (process_block(data_size, inode.i_block[visited_blocks]) != 0) {
+        if (process_block(inode.i_block[visited_blocks]) != 0) {
             fprintf(stderr, "Failed to process block %u\n", inode.i_block[visited_blocks]);
             free(block_data);
             fclose(fd);
@@ -293,7 +287,7 @@ int main(int argc, char *argv[]) {
 
     if (visited_blocks < block_count) {
         int result = process_indirect_block(inode.i_block[N_DIRECT_BLOCK_POINTERS], 0,
-                                            block_count, pointers_in_block, file_size);
+                                            block_count, pointers_in_block);
         if (result < 0) {
             fprintf(stderr, "Failed to process singly indirect blocks %u\n", inode.i_block[N_DIRECT_BLOCK_POINTERS]);
             free(block_data);
@@ -304,7 +298,7 @@ int main(int argc, char *argv[]) {
 
     if (visited_blocks < block_count) {
         int result = process_indirect_block(inode.i_block[N_DIRECT_BLOCK_POINTERS + 1], 1,
-                                            block_count, pointers_in_block, file_size);
+                                            block_count, pointers_in_block);
         if (result < 0) {
             fprintf(stderr, "Failed to process doubly indirect blocks %u\n",
                     inode.i_block[N_DIRECT_BLOCK_POINTERS + 1]);
@@ -316,7 +310,7 @@ int main(int argc, char *argv[]) {
 
     if (visited_blocks < block_count) {
         int result = process_indirect_block(inode.i_block[N_DIRECT_BLOCK_POINTERS + 2], 2,
-                                            block_count, pointers_in_block, file_size);
+                                            block_count, pointers_in_block);
         if (result < 0) {
             fprintf(stderr, "Failed to process triply indirect blocks %u\n",
                     inode.i_block[N_DIRECT_BLOCK_POINTERS + 2]);
